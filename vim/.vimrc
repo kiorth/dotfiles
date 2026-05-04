@@ -28,6 +28,7 @@ autocmd VimEnter * if len(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
 \| endif
 
 set nu
+set pastetoggle=<F2>
 set expandtab                   " Expand tabs to spaces
 set softtabstop=4               " Set the number of spaces a <Tab> character counts for
 set shiftwidth=4                " Width used for >> and << commands
