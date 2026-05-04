@@ -81,6 +81,7 @@ let g:doge_python_settings = {'single_quotes': 0,'omit_redundant_param_types': 0
 
 " COLOR-THEME
 " *********************
+set t_Co=256
 let g:airline_powerline_fonts = 1               " Enable Powerline-style fonts for the vim-airline status bar
 let g:airline_theme = 'badwolf'                 " Set the theme of vim-airline to 'badwolf'
 colorscheme molokai                             " Set the overall Vim colorscheme to 'molokai'
