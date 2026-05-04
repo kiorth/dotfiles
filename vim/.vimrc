@@ -61,6 +61,8 @@ nnoremap <silent> gd :YcmCompleter GoTo<CR>
 nnoremap <C-s> :w<CR>
 inoremap <C-s> <Esc>:w<CR>a
 nnoremap <leader>q :q<CR>
+nnoremap <C-x> :q!<CR>
+inoremap <C-x> <Esc>:q!<CR>
 nnoremap <leader>w :w<CR>
 nnoremap <leader>n :NERDTreeToggle<CR>
 nnoremap <C-p> :Files<CR>
