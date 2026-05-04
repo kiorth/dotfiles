@@ -1,0 +1,237 @@
+##############################
+# === SECTIONS ===
+##############################
+
+snippet sec "Section" b
+\section{${1:Section Title}}
+${0}
+endsnippet
+
+snippet ssec "Subsection" b
+\subsection{${1:Subsection Title}}
+${0}
+endsnippet
+
+snippet sssec "Subsubsection" b
+\subsubsection{${1:Subsubsection Title}}
+${0}
+endsnippet
+
+
+##############################
+# === FIGURES ===
+##############################
+
+snippet fig "Figure environment" b
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=${1:\textwidth}]{${2:filename}}
+    \caption{${3:caption}}
+    \label{fig:${4:label}}
+\end{figure}
+endsnippet
+
+
+##############################
+# === TABLES ===
+##############################
+
+snippet tab "Table environment" b
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{${1:c|c}}
+        \hline
+        ${2:Header 1} & ${3:Header 2} \\\\
+        \hline
+        ${4:Data 1} & ${5:Data 2} \\\\
+        \hline
+    \end{tabular}
+    \caption{${6:caption}}
+    \label{tab:${7:label}}
+\end{table}
+endsnippet
+
+
+##############################
+# === EQUATIONS ===
+##############################
+
+snippet \eq "Equation environment" mA
+\begin{equation}
+    ${0}
+    \label{eq:${1:label}}
+\end{equation}${2}
+endsnippet
+
+snippet \align "Align environment" mA
+\begin{align}
+    ${0} \\\\
+    ${1}
+    \label{eq:${2:label}}
+\end{align}${3}
+endsnippet
+
+
+##############################
+# === REFERENCES ===
+##############################
+
+snippet ref "Reference" w
+\ref{${1:label}}${0}
+endsnippet
+
+snippet cite "Citation" w
+\cite{${1:key}}${0}
+endsnippet
+
+snippet figref "Figure reference" w
+Figure~\ref{fig:${1:label}}${0}
+endsnippet
+
+snippet eqref "Equation reference" w
+Eq.~\eqref{eq:${1:label}}${0}
+endsnippet
+
+
+############################
+# --- MATH ---#
+############################
+snippet mk "Inline math" tA
+$${1}$${0}
+endsnippet
+
+snippet dm "Display math" tA
+$$
+${1}
+$$
+${0}
+endsnippet
+
+snippet sum "Sum" mA
+\sum
+endsnippet
+
+snippet beg "Begin environment" mA
+\begin{${1}}
+    ${0}
+\end{${1}}
+endsnippet
+
+# --- Greek letters ---
+snippet @a "alpha" mA
+\alpha
+endsnippet
+
+snippet @b "beta" mA
+\beta
+endsnippet
+
+snippet @g "gamma" mA
+\gamma
+endsnippet
+
+snippet @G "Gamma" mA
+\Gamma
+endsnippet
+
+snippet @d "delta" mA
+\delta
+endsnippet
+
+snippet @D "Delta" mA
+\Delta
+endsnippet
+
+snippet @e "epsilon" mA
+\epsilon
+endsnippet
+
+snippet :e "varepsilon" mA
+\varepsilon
+endsnippet
+
+snippet @t "theta" mA
+\theta
+endsnippet
+
+snippet :t "vartheta" mA
+\vartheta
+endsnippet
+
+snippet @l "lambda" mA
+\lambda
+endsnippet
+
+snippet @L "Lambda" mA
+\Lambda
+endsnippet
+
+snippet @s "sigma" mA
+\sigma
+endsnippet
+
+snippet @S "Sigma" mA
+\Sigma
+endsnippet
+
+snippet @o "omega" mA
+\omega
+endsnippet
+
+snippet @O "Omega" mA
+\Omega
+endsnippet
+
+# --- Basic operations ---
+snippet sq "Square root" mA
+\sqrt{${1}}${0}
+endsnippet
+
+snippet // "Fraction" mA
+\frac{${1:num}}{${2:den}}${0}
+endsnippet
+
+snippet rd "Superscript" mA
+^{${1}}${0}
+endsnippet
+
+snippet _ "Subscript" mA
+_{${1}}${0}
+endsnippet
+
+snippet ee "Exponent" mA
+e^{${1}}${0}
+endsnippet
+
+snippet invs "Inverse" mA
+^{-1}
+endsnippet
+
+snippet bf "Boldface" mA
+\mathbf{${1}}${0}
+endsnippet
+
+snippet rm "Roman" mA
+\mathrm{${1}}${0}
+endsnippet
+
+# --- Brackets ---
+snippet lr( "Left-right ()" mA
+\left( ${1} \right)${0}
+endsnippet
+
+snippet lr{ "Left-right {}" mA
+\left\{ ${1} \right\}${0}
+endsnippet
+
+snippet lr[ "Left-right []" mA
+\left[ ${1} \right]${0}
+endsnippet
+
+snippet lr| "Left-right ||" mA
+\left| ${1} \right|${0}
+endsnippet
+
+snippet lra "Left-right <>" mA
+\left< ${1} \right>${0}
+endsnippet
