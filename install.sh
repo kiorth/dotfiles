@@ -20,6 +20,9 @@ backup_and_link "$DOTFILES/vim/.vimrc"                   "$HOME/.vimrc"
 backup_and_link "$DOTFILES/vim/UltiSnips/tex.snippets"   "$HOME/.vim/UltiSnips/tex.snippets"
 backup_and_link "$DOTFILES/vim/colors/molokai.vim"        "$HOME/.vim/colors/molokai.vim"
 
+echo "==> Linking tmux config"
+backup_and_link "$DOTFILES/tmux/.tmux.conf" "$HOME/.tmux.conf"
+
 echo "==> Sourcing bash functions"
 if ! grep -qF "dotfiles/bash/functions.sh" "$HOME/.bashrc" 2>/dev/null; then
     echo "source \"$DOTFILES/bash/functions.sh\"" >> "$HOME/.bashrc"
