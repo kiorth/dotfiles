@@ -51,9 +51,7 @@ let g:UltiSnipsSnippetDirectories=[$HOME.'/.vim/UltiSnips']          " default s
 " Use <C-Space> to trigger completion manually
 inoremap <silent><expr> <C-Space> ycm#TriggerCompletion()
 
-" Fix <CR> conflict: disable auto-pairs own CR hook, then chain manually
-let g:AutoPairsMapCR = 0
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<Plug>AutoPairsReturn"
+inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<CR>"
 
 " K: show docs for symbol under cursor (hover-like); gd: go to definition
 nnoremap <silent> K :YcmCompleter GetDoc<CR>
