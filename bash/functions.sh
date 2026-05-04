@@ -9,20 +9,31 @@ nano() {
     fi
 }
 Env() {
-    ENV_DIR="$PYTHON_ENVS"
+    local ENV_DIR="$PYTHON_ENVS"
     local envs=()
     local i=1
-    
-    for d in "ENV_DIR"/*; do
-        if [ -f "$d/bin/activate" ]; then 
+
+    for d in "$ENV_DIR"/*/; do
+        if [ -f "$d/bin/activate" ]; then
             envs+=("$d")
             echo "[$i] $(basename "$d")"
             ((i++))
-        fi 
+        fi
     done
-    if [ ${#envs[@]} -eq 0 ]; then 
-        echo "No environments found"
+
+    if [ ${#envs[@]} -eq 0 ]; then
+        echo "No environments found in $ENV_DIR"
         return 1
-    fi 
-    source "${envs[$((choice - 1))]}/bin/activate"
+    fi
+
+    printf "Select environment: "
+    read -r choice
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#envs[@]}" ]; then
+        source "${envs[$((choice - 1))]}/bin/activate"
+        echo "Activated $(basename "${envs[$((choice - 1))]}")"
+    else
+        echo "Invalid selection"
+        return 1
+    fi
 }
