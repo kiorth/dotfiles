@@ -66,7 +66,6 @@ nnoremap <C-x> :q!<CR>
 inoremap <C-x> <Esc>:q!<CR>
 nnoremap <leader>w :w<CR>
 nnoremap <leader>n :NERDTreeToggle<CR>
-nnoremap <leader>y :w !tmux load-buffer -<CR>
 nnoremap <C-p> :Files<CR>
 nnoremap <leader>/ :Rg<CR>
 nnoremap <leader>b :Buffers<CR>
