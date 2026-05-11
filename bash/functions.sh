@@ -40,14 +40,13 @@ Env() {
 rcp() {
     local str="$(whoami)@$(hostname -d):$(realpath $1)"
     local local_ip=$(echo $SSH_CLIENT | awk '{print $1}')
-    ssh ${local_ip} "DISPLAY=:1 xclip -selection clipboard" <<< "$str"
+    if [ -n "$SSH_CLIENT" ]; then
+        # we are on cluster, SSH back to local
+        ssh ${local_ip} "echo '${str}' | tmux load-buffer -"
+    else
+        # we are local
+        tmux load-buffer "$(realpath $1)"
+    fi
     echo "Copied: $str"
 }
-rp() {
-    local dest="${1:-.}"
-    local src="$(xclip -selection clipboard -o)"
-    rsync -avz "$src" "$dest"
-}
-
-
 
