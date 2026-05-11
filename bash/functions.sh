@@ -39,8 +39,9 @@ Env() {
 }
 rcp() {
     local str="$(whoami)@$(hostname -d):$(realpath $1)"
-    printf "\033]52;c;$(printf '%s' "$str" | base64)\a"
-    echo "Copied to clipboard: $str"
+    local local_ip=$(echo $SSH_CLIENT | awk '{print $1}')
+    ssh ${local_ip} "DISPLAY=:1 xclip -selection clipboard" <<< "$str"
+    echo "Copied: $str"
 }
 rp() {
     local dest="${1:-.}"
