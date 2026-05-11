@@ -49,4 +49,8 @@ rcp() {
     fi
     echo "Copied: $str"
 }
-
+rp() {
+    local src="$(tmux show-buffer)"
+    local dest="${1:-.}"
+    rsync -avz "$src" "$dest"
+}
