@@ -38,7 +38,7 @@ Env() {
     fi
 }
 rcp() {
-    local str="$(whoami)@$(hostname):$(realpath $1)"
+    local str="$(whoami)@$(hostname -d):$(realpath $1)"
     printf "\033]52;c;$(printf '%s' "$str" | base64)\a"
     echo "Copied to clipboard: $str"
 }
