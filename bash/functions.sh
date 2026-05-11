@@ -37,9 +37,8 @@ Env() {
         return 1
     fi
 }
-
 rcp() {
-    local str="$(whoami)@$(hostname):$1"
+    local str="$(whoami)@$(hostname):$(realpath $1)"
     printf "\033]52;c;$(printf '%s' "$str" | base64)\a"
     echo "Copied to clipboard: $str"
 }
@@ -47,4 +46,7 @@ rp() {
     local dest="${1:-.}"
     local src="$(xclip -selection clipboard -o)"
     rsync -avz "$src" "$dest"
-}
+}
+
+
+
