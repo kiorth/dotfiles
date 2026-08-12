@@ -109,3 +109,20 @@ Env() {
         return 1
     fi
 }
+rcp() {
+    local str="$(whoami)@$(hostname -d):$(realpath $1)"
+    local local_ip=$(echo $SSH_CLIENT | awk '{print $1}')
+    if [ -n "$SSH_CLIENT" ]; then
+        # we are on cluster, SSH back to local
+        ssh ${local_ip} "echo '${str}' | tmux load-buffer -"
+    else
+        # we are local
+        tmux load-buffer "$(realpath $1)"
+    fi
+    echo "Copied: $str"
+}
+rp() {
+    local src="$(tmux show-buffer)"
+    local dest="${1:-.}"
+    rsync -avz "$src" "$dest"
+}
