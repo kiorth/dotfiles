@@ -34,6 +34,50 @@ else
     echo "  already in ~/.bashrc"
 fi
 
+echo "==> Linking Claude Code config"
+mkdir -p "$HOME/.claude/commands"
+for cmd in "$DOTFILES"/claude/commands/*.md; do
+    [ -e "$cmd" ] || continue
+    backup_and_link "$cmd" "$HOME/.claude/commands/$(basename "$cmd")"
+done
+if [ -d "$DOTFILES/claude/skills" ]; then
+    mkdir -p "$HOME/.claude/skills"
+    for skill in "$DOTFILES"/claude/skills/*/; do
+        [ -d "$skill" ] || continue
+        name="$(basename "${skill%/}")"
+        dest="$HOME/.claude/skills/$name"
+        # Back up OUTSIDE ~/.claude/skills: a *.bak left in place is still a
+        # valid skill directory, and Claude Code loads it as a second, stale
+        # copy of the same skill.
+        if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+            mkdir -p "$HOME/.claude/skill-backups"
+            mv "$dest" "$HOME/.claude/skill-backups/$name.$(date +%Y%m%d%H%M%S)"
+            echo "  backed up existing $name → ~/.claude/skill-backups/"
+        fi
+        ln -sfn "${skill%/}" "$dest"
+        echo "  linked $dest"
+    done
+fi
+
+echo "==> Cluster-specific setup"
+# Deliberately not tracked in git: partitions, module preludes and per-workflow
+# resources differ per cluster. `espresso cluster config` regenerates them, and
+# the project conventions are templated rather than copied so $WORK can differ.
+if [ -n "$WORK" ] && [ -d "$WORK" ]; then
+    if [ ! -e "$WORK/CLAUDE.md" ]; then
+        cp "$DOTFILES/claude/WORK-CLAUDE.md.template" "$WORK/CLAUDE.md"
+        echo "  wrote $WORK/CLAUDE.md"
+    else
+        echo "  $WORK/CLAUDE.md exists, left alone"
+    fi
+else
+    echo "  \$WORK unset or missing; skipping project conventions"
+    echo "  set \$WORK, then: cp $DOTFILES/claude/WORK-CLAUDE.md.template \$WORK/CLAUDE.md"
+fi
+if [ ! -f "$HOME/.config/espresso/espresso-cluster.json" ]; then
+    echo "  no espresso cluster config; run: espresso cluster config"
+fi
+
 echo "==> Installing vim-plug"
 if [ ! -f "$HOME/.vim/autoload/plug.vim" ]; then
     curl -fLo "$HOME/.vim/autoload/plug.vim" --create-dirs \

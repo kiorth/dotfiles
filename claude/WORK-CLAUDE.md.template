@@ -1,0 +1,75 @@
+# DFT projects — working conventions
+
+One directory per material under `$WORK`. Each is a project with its own
+`status.md`. Use the `espresso` CLI for everything it covers; discover flags
+with `espresso <cmd> --help` rather than guessing.
+
+## status.md is a lab notebook, not a job list
+
+`status.md` holds parameters, results, interpretation, and the findings that
+cost time to learn. **Never machine-generate any of it.** Edits to the prose
+are shown as a diff and approved first, as before.
+
+The one exception is the derived block between
+
+```
+<!-- espresso-status:begin -->   ...   <!-- espresso-status:end -->
+```
+
+which `espresso status --markdown` owns and rewrites freely. It carries facts
+only: path, jobid, Slurm state, steps, class, retries. Reasoning about a job
+("submitted before the bad-node problem was known, so no --exclude") belongs in
+the human sections, keyed by job-dir path.
+
+Do not hand-maintain the job list any more. Run `espresso status`.
+
+## Job state is derived
+
+`espresso status [path]` walks the project, cross-references `squeue`/`sacct`
+by `WorkDir`, and classifies every job directory. It is read-only: it never
+submits and never edits an input. `--json` for machine consumption,
+`--needs-action` to see only what is unresolved.
+
+Do not re-derive completion by hand. In particular: **`JOB DONE.` is not
+sufficient** — QE prints it even when it stopped at `max_seconds`, and Slurm
+reports COMPLETED. `espresso status` already handles this.
+
+## Retry policy — act, do not ask
+
+Classification is mechanical, from `espresso/defaults/failure_signatures.toml`.
+
+- **RETRY** (walltime, node failure, preemption, stale scratch, launch fault):
+  resubmit with the remedy the classifier names, record it, and **do not ask**.
+  Report it at the next `/check`.
+- **HUMAN** (SCF non-convergence, OOM, `cdiaghg`, missing pseudopotential,
+  malformed input, unconverged bands, `ECUTRHO` too low, symmetry mismatch):
+  attempt **the one documented fix** in the signature's `remedy` field, exactly
+  once. If that also fails, escalate. Never invent a fix that is not in the
+  table — if the table has no remedy, escalate immediately.
+- **Cap: 5 auto-resubmits per job directory.** Past that, escalate regardless
+  of class: five infrastructure failures is not an infrastructure problem. The
+  count lives in `<project>/.espresso-status.json` and resets when the inputs
+  change.
+- **UNKNOWN**: report it. Never treat a missing `sacct` record as success.
+- The existing rule still binds tighter: never resubmit an unchanged input that
+  has failed twice for the same reason without saying so and proposing a change.
+
+Escalations are **queued**, not pushed — collect them and present them at the
+next `/check` rather than interrupting.
+
+### What still needs a decision
+
+The gate is **"should this system / functional / geometry be computed at all"**,
+not "may I resubmit". Always ask before:
+
+- starting a new material, functional, or geometry;
+- anything that changes what physics is being computed;
+- deleting data, or anything that costs significant allocation.
+
+Adding a new failure mode means editing the signature table, not this file.
+
+## Before submitting
+
+Verify the calculation is built on the relaxed structure
+(`espresso check compare`), and confirm the actual XC functional from the
+`.pwo`. Show the resource block and the exact `sbatch` line.
