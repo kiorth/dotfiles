@@ -16,10 +16,16 @@ The one exception is the derived block between
 <!-- espresso-status:begin -->   ...   <!-- espresso-status:end -->
 ```
 
-which `espresso status --markdown` owns and rewrites freely. It carries facts
-only: path, jobid, Slurm state, steps, class, retries. Reasoning about a job
-("submitted before the bad-node problem was known, so no --exclude") belongs in
-the human sections, keyed by job-dir path.
+which `espresso status --markdown` renders and `espresso status write` updates
+in place. That command rewrites only the marked region and refuses to write if
+anything outside it would change; use it rather than splicing by hand. The block
+carries facts only: path, jobid, Slurm state, steps, class, retries. Reasoning
+about a job ("submitted before the bad-node problem was known, so no --exclude")
+belongs in the human sections, keyed by job-dir path.
+
+The block covers **QE job directories only**. Jobs submitted from elsewhere —
+python drivers, post-processing, cross-project scripts — are attributed to their
+Slurm `WorkDir` and will not appear. Track them by hand and label them as such.
 
 Do not hand-maintain the job list any more. Run `espresso status`.
 

@@ -15,10 +15,11 @@ the current project) and report what changed.
    - `HUMAN` → attempt the documented fix from the `remedy` field **once**;
      if it has already been attempted, queue the escalation.
    - `UNKNOWN` → report it; do not guess.
-4. Refresh the derived block in `status.md` with
-   `espresso status --markdown`, splicing **only** between the
-   `<!-- espresso-status:begin -->` / `<!-- espresso-status:end -->` markers.
-   Never touch the rest of the file.
+4. Refresh the derived block with `espresso status write`. It rewrites only the
+   marked region and refuses if anything outside it would change. Never splice
+   it by hand, and never edit the rest of the file without asking.
+   Remember the block covers QE job dirs only — jobs submitted from another
+   directory are tracked by hand in the human sections.
 
 Report as: what changed, what you resubmitted, what needs the user. If nothing
 changed, say so in one line.

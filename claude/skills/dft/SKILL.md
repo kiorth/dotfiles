@@ -224,8 +224,10 @@ The job list is no longer hand-maintained. It lives in a derived block that
 <!-- espresso-status:end -->
 ```
 
-Regenerate that block freely; **never edit anything outside the markers without
-asking.** Facts go in the block; reasoning goes in the human sections, keyed by the
+Regenerate it with `espresso status write` (add `--dry-run` to preview). That
+command rewrites only the marked region and **refuses to write at all** if any
+line outside it would change, so it is safe to run unattended. Do not splice the
+block by hand. **Never edit anything outside the markers without asking.** Facts go in the block; reasoning goes in the human sections, keyed by the
 same job-dir path:
 
 ```markdown
@@ -261,4 +263,10 @@ it writes is the retry ledger, under `--record`.
 
 Then apply the retry policy in `$WORK/CLAUDE.md`: act on `RETRY`, escalate `HUMAN`,
 never treat `UNKNOWN` as success. Report a short table of what changed, and refresh
-the derived block in `status.md`.
+the derived block with `espresso status write`.
+
+**The block covers QE job directories only.** Anything submitted from another
+directory — python drivers, post-processing, cross-project scripts — is attributed
+to wherever its Slurm `WorkDir` points, and will not appear. Track those by hand in
+the human sections, and say so there, or a future reader will read the block as
+complete coverage when it is not.
