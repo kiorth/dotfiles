@@ -7,7 +7,10 @@ hand-roll the directory structure.
 
 1. Confirm the structure first. If a relaxed structure exists
    (`SYSTEM.RELAXED.INFO`, `*-relaxed.cif`, `*vc-relax.pwo`), verify the inputs
-   are built on it with `espresso check compare`, and stop if they are not.
+   are built on it with `espresso check compare <relaxed> <input>` — relaxed
+   structure first — and stop if they are not. Read the `Δmax(Å)` column, not
+   just the cell: a stale structure can match on cell and differ in positions.
+   The command always exits 0; a clean exit is not a pass.
 2. Generate: `espresso convergence cutoff` and `espresso convergence kgrid`
    with the parameters the user asked for. Show the resource block and the
    exact `sbatch` lines, and get a go-ahead before submitting.

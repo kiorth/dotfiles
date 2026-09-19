@@ -179,9 +179,33 @@ Look for: `SYSTEM.RELAXED.INFO`, `*-relaxed.cif`, `vc-relax/results_vc_relax/*.v
 espresso check compare <relaxed.pwo> <new_input.pwi> [<raw.cif>]
 ```
 
-Report the aligned table and state explicitly whether the cell parameters and space group
-of the new input match the relaxed structure. If they do not match, **stop and say so**
-before submitting.
+Put the **relaxed structure first** — every other row is measured against row 1.
+
+Read three things from the table, not one:
+
+- **cell columns** (`a b c α β γ`) — a scale or shape difference;
+- **`Δmax(Å)`** — the largest per-atom displacement from row 1. This is the column that
+  catches a stale structure whose *cell* happens to match: the ferroelectric phases differ
+  from the paraelectric parent mainly by internal displacements at a nearly unchanged cell,
+  and before this column existed such a pair rendered byte-identical rows. A dash means no
+  number could be measured, and a footnote says why (composition, space group, or atom
+  count differs) — a dash is not a pass.
+- **`same as`** — the first earlier row this one is indistinguishable from. Two rows can
+  carry the same Δmax and still be different structures equidistant from row 1; only this
+  column tells them apart.
+
+State explicitly whether the new input matches the relaxed structure, quoting Δmax. If it
+does not, **stop and say so** before submitting.
+
+**The command always exits 0**, by design — it reports facts and leaves the judgement to
+you. Never treat a successful exit as a pass; read the table.
+
+A `Species` block appears under the table for spin-polarised QE files, naming each species,
+its site count in the standardized cell and its `starting_magnetization`. Check it whenever
+the system is magnetic: a `SYSTEM.INFO` can carry split labels like `Fe1`/`Fe2` while having
+lost the moments that give them meaning, which makes a ferrimagnet run non-spin-polarised.
+Moments read from a `.pwo` are what the run actually used; those from a `.pwi` or
+`SYSTEM.INFO` are only what is intended next.
 
 Also verify the functional actually used, not the one claimed: `SYSTEM.INFO` may say
 `EXCHANGE='pbe'` while the pseudopotentials in `PSEUDO_DIR` are PBEsol. Grep the reference
