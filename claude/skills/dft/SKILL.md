@@ -24,9 +24,9 @@ explicitly asked.
 - `$WORK/CLAUDE.md` carries the retry policy. Follow it: act on `RETRY`, escalate
   `HUMAN`, and do not ask permission for bookkeeping.
 
-Discover the toolset with `espresso <cmd> --help` rather than guessing flags; the CLI
-changes. Top-level commands: `check`, `clean`, `cluster`, `compute`, `convergence`,
-`input`, `para`, `post`, `status`, `structure`, `system-info`.
+Discover the toolset with `espresso --help` and `espresso <cmd> --help` rather than
+guessing flags. The CLI changes often enough that any list written here goes stale;
+`qmap -t espresso` prints the current tree.
 
 ## 1. Generating / editing inputs
 
@@ -84,13 +84,64 @@ Every batch partition is `TIMELIMIT 5-00:00:00`; `hugemem` is 1 node / 80 cores 
   `sbatch --test-only <same flags> --partition=batch-milan --wrap="true"`, which names the nodes
   and an estimated start if the shape is satisfiable at all.
 
-### Parallelising ph.x — use k-point pools
+### `Insane message length` — a burst, not a bad node
+
+Multi-node task launch sometimes dies within seconds to minutes with:
+
+```
+srun: error: slurm_receive_msgs: [<node>] failed: Insane message length
+srun: error: Task launch for StepId=... failed on node <node>: Header lengths are longer than data received
+srun: error: Application launch failed: Insane message length
+```
+
+Slurm `ExitCode 240:0`, elapsed measured in minutes. **Do not conclude the node is bad, and do
+not add it to `--exclude`.** Measured on this cluster (2026-09-12), these failures cluster in
+*time*, not by node: bursts on 09-04 (milan[1,16], 5 tasks), 09-06 (skl[3,35], 8), 09-07
+(milan[14,21], 1) and 09-12 (milan[7,18], 12). Within a burst the same pair recurs only because a
+job that dies in seconds frees its nodes instantly and the next queued task is handed the same
+pair — a feedback loop that looks exactly like a node fault and is not one.
+
+Check before blaming a node — all three are quick and all three refuted it here:
+
+```
+squeue -w <node> -o "%.12i %.10u %.10T %.12M %.6D"   # other users running fine on it right now?
+sacct -S <date> -u $USER --format=JobID,State,Start,Elapsed,NodeList%20 -X   # did MY jobs ever succeed on it?
+```
+
+milan18 had run a 2-node ph.x for 3d17h, and milan7 for 1d09h, days before each was accused.
+
+**Excluding does not help; it relocates.** The standing list grew milan1,16 → +skl3,35 →
++milan14,21 → +milan7,18, and each addition was followed by the next burst on the next pair.
+A recurring burst is a cluster-side condition to report to the admins, not something `--exclude`
+fixes. The cheap response is to resubmit — the work is restartable and `tmp/` survives.
+
+Note `srun prog > out` **truncates `out` even when srun dies instantly**, so the victim is left
+with a 0-byte output and no log. Diagnose these from the Slurm log and `sacct`, never from the
+empty output file.
+
+### Restarting a single failed irrep
+
+`cd <para_*/q*/irr_*_*> && sbatch <workflow root>/phonon_array_single.sh` — exactly what
+`espresso check para_elph` prints at the end of its report. That script is generated from
+`espresso/defaults/scripts/phonon_array_single.sh.j2`; it takes no arguments and is submitted
+*from inside* the irrep folder, which is how it finds `ph.pwi` and its own `tmp/`.
+
+**Do not hand-write a replacement for it.** Resource changes belong in the SLURM_* values the
+template already exposes, or as `sbatch` flags at submit time. Anything the template cannot
+express — `-nk`, a different `srun` form — is a change to the template and its generator in
+`espresso/qe/parallel.py`, so every future workflow gets it too. A bespoke one-off script in a
+project directory is the wrong unit of work and will drift from what the CLI produces.
+
+### Parallelising ph.x — k-point pools
 
 `srun ph.x` with no `-nk` runs `npool=1`: pure plane-wave parallelism, walking every k-point
 serially. Check any `.pwo` for the line `R & G space division: proc/nbgrp/npool/nimage`. For DFPT
 the linear solve is ~95% of the wall time (`ch_psi` in the final timing block) and parallelises
 over k almost perfectly, so pools are the highest-value flag available.
 
+- No template currently emits `-nk`, so using pools means adding it to
+  `phonon_array_single.sh.j2` / `phonon_array.sh.j2` and their renderer — not editing a
+  generated script in place, and not writing a new one.
 - Choose pools so that **procs-per-pool stays equal to a shape already proven to run**. Per-rank
   G-space memory is set by procs-per-pool, not by total ranks; holding it fixed and adding pools
   buys near-linear speedup while *lowering* per-rank memory, since each pool stores fewer k-points.
@@ -103,6 +154,17 @@ over k almost perfectly, so pools are the highest-value flag available.
 
 When an irrep times out at `max_seconds`, the levers are, in order: pools (`-nk`), more
 tasks/node, then looser `tr2_ph`. Never more walltime — 5 d is the cluster maximum.
+
+**First check `max_seconds` is what you think it is, across the whole tree.** A para tree's
+`ph.pwi` files are generated at different times and drift apart, so a "timed out" irrep may simply
+carry a smaller budget than its own allocation allows:
+
+```
+for f in para_elph/q*/irr_*/ph.pwi; do grep -oP 'max_seconds\s*=\s*\K[0-9]+' $f; done | sort | uniq -c
+```
+
+More than one value means some irreps are discarding walltime they were granted. Raising it is
+physics-neutral, and a pending job picks up an edited `ph.pwi` at start — no resubmit needed.
 
 ## 2. Mandatory relaxed-structure check
 

@@ -1,0 +1,560 @@
+#!/usr/bin/env python3
+"""qmap - what exists in this DFT setup.
+
+Prints, from one place, the things you would otherwise have to remember to look
+for in six: Claude skills, slash commands, subagents, the permission rules, the
+espresso CLI tree, and the failure-signature policy.
+
+It answers *what exists*, and stops.  Deciding what to do next is the `dft`
+skill's job, not this tool's.
+
+    qmap                    one screen, everything
+    qmap <term>             substring filter across every source
+    qmap -t <type> [term]   restrict to skill|cmd|agent|espresso|perm|policy|all
+    qmap --paths            show the file backing each entry
+    qmap --json             machine-readable
+    qmap --refresh          force the espresso cache to rebuild
+    qmap --notes            caveats and where each section comes from
+
+Read-only: it opens files you own and shells out to nothing but the espresso
+CLI walk.  Matching is plain case-insensitive substring - there is deliberately
+no ranking or fuzzy matching, so a hit is always explainable.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+CLAUDE = os.path.join(HOME, ".claude")
+CACHE = os.path.join(
+    os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"),
+    "qmap",
+    "espresso-cli.tsv",
+)
+
+TYPES = ["skill", "cmd", "agent", "perm", "espresso", "policy"]
+ALIASES = {
+    "skills": "skill", "skill": "skill",
+    "commands": "cmd", "command": "cmd", "cmds": "cmd", "cmd": "cmd",
+    "agents": "agent", "agent": "agent", "subagent": "agent", "subagents": "agent",
+    "perms": "perm", "perm": "perm", "permissions": "perm", "permission": "perm",
+    "espresso": "espresso", "cli": "espresso",
+    "policy": "policy", "signatures": "policy", "signature": "policy",
+    "all": "all",
+}
+
+# Only these settings files are real.  A recursive grep for '"hooks"' under
+# ~/.claude also matches inert plugin-marketplace definitions that are fetched
+# but never enabled, and reports hooks that do not exist.  Explicit paths only.
+def settings_files():
+    out = [
+        os.path.join(CLAUDE, "settings.json"),
+        os.path.join(CLAUDE, "settings.local.json"),
+        os.path.join(os.getcwd(), ".claude", "settings.json"),
+        os.path.join(os.getcwd(), ".claude", "settings.local.json"),
+    ]
+    return [p for p in out if os.path.isfile(p)]
+
+
+# ---------------------------------------------------------------- frontmatter
+
+def frontmatter(path):
+    """Parse the leading --- fenced block.  Values may be quoted or folded."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            if fh.readline().strip() != "---":
+                return {}
+            body = []
+            for line in fh:
+                if line.strip() == "---":
+                    break
+                body.append(line.rstrip("\n"))
+    except OSError:
+        return {}
+    meta, key = {}, None
+    for line in body:
+        m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
+        if m:
+            key = m.group(1)
+            meta[key] = m.group(2).strip()
+        elif key and line.strip():
+            meta[key] += " " + line.strip()
+    for k, v in meta.items():
+        if len(v) > 1 and v[0] == v[-1] and v[0] in "\"'":
+            meta[k] = v[1:-1]
+    return meta
+
+
+def one_line(text, limit=None):
+    text = " ".join((text or "").split())
+    if limit and len(text) > limit:
+        text = text[: limit - 1] + "…"
+    return text
+
+
+# -------------------------------------------------------------------- sources
+
+def load_skills():
+    out, root = [], os.path.join(CLAUDE, "skills")
+    for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        path = os.path.join(root, name, "SKILL.md")
+        if not os.path.isfile(path):
+            continue
+        meta = frontmatter(path)
+        out.append({
+            "type": "skill",
+            "name": meta.get("name", name),
+            "desc": meta.get("description", ""),
+            "path": os.path.realpath(path),
+        })
+    return out
+
+
+def load_commands():
+    out, root = [], os.path.join(CLAUDE, "commands")
+    for fn in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        if not fn.endswith(".md"):
+            continue
+        path = os.path.join(root, fn)
+        meta = frontmatter(path)
+        out.append({
+            "type": "cmd",
+            "name": "/" + meta.get("name", fn[:-3]),
+            "desc": meta.get("description", ""),
+            "path": os.path.realpath(path),
+        })
+    return out
+
+
+def load_agents():
+    out, root = [], os.path.join(CLAUDE, "agents")
+    for fn in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        if not fn.endswith(".md"):
+            continue
+        path = os.path.join(root, fn)
+        meta = frontmatter(path)
+        out.append({
+            "type": "agent",
+            "name": meta.get("name", fn[:-3]),
+            "desc": meta.get("description", ""),
+            "extra": one_line(meta.get("tools", "")),
+            "path": os.path.realpath(path),
+        })
+    return out
+
+
+def load_perms():
+    out = []
+    for path in settings_files():
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError) as exc:
+            warn("cannot read %s (%s)" % (path, exc))
+            continue
+        perms = data.get("permissions") or {}
+        for bucket in ("allow", "ask", "deny"):
+            for pattern in perms.get(bucket) or []:
+                out.append({
+                    "type": "perm",
+                    "name": pattern,
+                    "desc": bucket,
+                    "path": path,
+                })
+        mode = perms.get("defaultMode")
+        if mode:
+            out.append({
+                "type": "perm",
+                "name": "(default mode)",
+                "desc": mode,
+                "path": path,
+            })
+        for event, entries in (data.get("hooks") or {}).items():
+            out.append({
+                "type": "perm",
+                "name": "hook:" + event,
+                "desc": "%d matcher(s)" % len(entries or []),
+                "path": path,
+            })
+    return out
+
+
+def espresso_source_dir():
+    """The package directory recorded in the cache header, if any."""
+    try:
+        with open(CACHE, encoding="utf-8") as fh:
+            head = fh.readline().rstrip("\n")
+    except OSError:
+        return None
+    return head.split("\t", 1)[1] if head.startswith("#src\t") else None
+
+
+def newest_py_mtime(root):
+    newest = 0.0
+    stack = [root]
+    while stack:
+        try:
+            entries = list(os.scandir(stack.pop()))
+        except OSError:
+            continue
+        for e in entries:
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    if e.name not in ("__pycache__", ".git"):
+                        stack.append(e.path)
+                elif e.name.endswith((".py", ".toml")):
+                    newest = max(newest, e.stat().st_mtime)
+            except OSError:
+                continue
+    return newest
+
+
+def espresso_interpreter():
+    exe = shutil.which("espresso")
+    if not exe:
+        return None
+    try:
+        with open(exe, "rb") as fh:
+            first = fh.readline().decode("utf-8", "replace").strip()
+    except OSError:
+        return None
+    if first.startswith("#!"):
+        cand = first[2:].strip().split()[0]
+        if os.path.exists(cand):
+            return cand
+    return sys.executable
+
+
+def rebuild_espresso_cache():
+    interp = espresso_interpreter()
+    if not interp:
+        warn("espresso is not on PATH; skipping the espresso and policy sections")
+        return None
+    walker = os.path.join(os.path.dirname(os.path.realpath(__file__)), "_espresso_tree.py")
+    try:
+        res = subprocess.run(
+            [interp, walker], capture_output=True, text=True, timeout=60, check=False
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        warn("could not walk the espresso CLI (%s)" % exc)
+        return None
+    if res.returncode != 0 or not res.stdout.strip():
+        warn("could not walk the espresso CLI: %s" % one_line(res.stderr, 200))
+        return None
+    try:
+        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+        tmp = CACHE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(res.stdout)
+        os.replace(tmp, CACHE)
+    except OSError as exc:
+        warn("could not write the cache (%s)" % exc)
+    return res.stdout
+
+
+def espresso_tsv(refresh=False):
+    """Cached, invalidated by source mtime - an editable install makes that exact."""
+    if refresh:
+        return rebuild_espresso_cache()
+    src = espresso_source_dir()
+    if src and os.path.isdir(src):
+        try:
+            if newest_py_mtime(src) <= os.stat(CACHE).st_mtime:
+                with open(CACHE, encoding="utf-8") as fh:
+                    return fh.read()
+        except OSError:
+            pass
+    return rebuild_espresso_cache()
+
+
+def load_espresso(refresh=False):
+    text = espresso_tsv(refresh)
+    if not text:
+        return []
+    out = []
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        path, _, short = line.partition("\t")
+        out.append({
+            "type": "espresso",
+            "name": "espresso " + path,
+            "desc": short,
+            "path": espresso_source_dir() or "",
+        })
+    return out
+
+
+def load_policy():
+    src = espresso_source_dir()
+    if not src:
+        return []
+    path = os.path.join(src, "defaults", "failure_signatures.toml")
+    if not os.path.isfile(path):
+        return []
+    try:
+        import tomllib
+    except ImportError:
+        warn("python < 3.11 has no tomllib; skipping the policy section")
+        return []
+    try:
+        with open(path, "rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, ValueError) as exc:
+        warn("cannot read the signature table (%s)" % exc)
+        return []
+    out = []
+    for sig in data.get("signature") or []:
+        remedy = sig.get("remedy") or {}
+        action = remedy.get("action", "none")
+        knob = remedy.get("knob")
+        out.append({
+            "type": "policy",
+            "name": sig.get("id", "?"),
+            "desc": "%s - %s" % (sig.get("verdict", "?"), sig.get("cause", "")),
+            "extra": action + ((" " + knob) if knob else ""),
+            "match": sig.get("match") or sig.get("regex") or "",
+            "fix": sig.get("fix", ""),
+            "path": path,
+        })
+    return out
+
+
+def load_all(refresh=False):
+    return (
+        load_skills()
+        + load_commands()
+        + load_agents()
+        + load_perms()
+        + load_espresso(refresh)
+        + load_policy()
+    )
+
+
+# ------------------------------------------------------------------ rendering
+
+COLOR = sys.stdout.isatty() and os.environ.get("TERM") not in (None, "dumb")
+
+
+def c(code, text):
+    return "\033[%sm%s\033[0m" % (code, text) if COLOR else text
+
+
+def warn(msg):
+    sys.stderr.write("qmap: %s\n" % msg)
+
+
+def width():
+    try:
+        return max(60, shutil.get_terminal_size((100, 24)).columns)
+    except Exception:
+        return 100
+
+
+def matches(entry, term):
+    if not term:
+        return True
+    hay = " ".join(
+        str(entry.get(k, "")) for k in ("name", "desc", "extra", "match", "fix")
+    ).lower()
+    return term.lower() in hay
+
+
+def row(name, desc, pad, show_path=None):
+    avail = width() - pad - 3
+    line = "  %s  %s" % (c("1", name.ljust(pad)), one_line(desc, max(20, avail)))
+    if show_path:
+        line += "\n" + " " * (pad + 4) + c("2", show_path)
+    return line
+
+
+def _tally(items, key):
+    counts = {}
+    for e in items:
+        counts[key(e)] = counts.get(key(e), 0) + 1
+    return counts
+
+
+def perm_summary(items):
+    buckets = _tally([e for e in items if e["desc"] in ("allow", "ask", "deny")],
+                     lambda e: e["desc"])
+    mode = next((e["desc"] for e in items if e["name"] == "(default mode)"), "?")
+    hooks = [e for e in items if e["name"].startswith("hook:")]
+    bits = ["%d %s" % (buckets.get(b, 0), b) for b in ("allow", "ask", "deny")]
+    bits.append("default mode: %s" % mode)
+    bits.append("%d hooks" % len(hooks))
+    return ["  " + "  \u00b7  ".join(bits),
+            c("2", "  -t perm for every pattern, and which file sets it")]
+
+
+def policy_summary(items):
+    verdicts = _tally(items, lambda e: e["desc"].split(" - ")[0])
+    bits = ["%d %s" % (verdicts.get(v, 0), v) for v in ("RETRY", "HUMAN", "INFO")
+            if verdicts.get(v)]
+    escalate = sum(1 for e in items if (e.get("extra") or "").startswith("none"))
+    return ["  " + "  \u00b7  ".join(bits) + "  \u00b7  cap 5 auto-resubmits per job dir",
+            "  " + c("2", "RETRY: act, do not ask   HUMAN: the one documented fix, once   "
+                          "%d have no remedy -> escalate" % escalate),
+            c("2", "  -t policy for every signature, its cause and its fix")]
+
+
+def espresso_summary(items):
+    """Top-level groups with subcommand counts, wrapped to the terminal."""
+    counts = {}
+    for e in items:
+        parts = e["name"].split()[1:]
+        if not parts:
+            continue
+        counts.setdefault(parts[0], 0)
+        if len(parts) > 1:
+            counts[parts[0]] += 1
+    words = [g + ("(%d)" % n if n else "") for g, n in sorted(counts.items())]
+    lines, cur = [], "  "
+    for w in words:
+        if len(cur) + len(w) + 1 > width() - 2 and cur.strip():
+            lines.append(cur.rstrip())
+            cur = "  "
+        cur += w + " "
+    if cur.strip():
+        lines.append(cur.rstrip())
+    lines.append(c("2", "  -t espresso for the full tree, with help for every command"))
+    return lines
+
+
+SUMMARISE = {
+    "perm": perm_summary,
+    "espresso": espresso_summary,
+    "policy": policy_summary,
+}
+
+
+def render(entries, term, only, paths):
+    groups = {t: [e for e in entries if e["type"] == t] for t in TYPES}
+    labels = {
+        "skill": ("SKILLS", os.path.join(CLAUDE, "skills")),
+        "cmd": ("COMMANDS", os.path.join(CLAUDE, "commands")),
+        "agent": ("AGENTS", os.path.join(CLAUDE, "agents")),
+        "perm": ("PERMISSIONS", "settings.json"),
+        "espresso": ("ESPRESSO", espresso_source_dir() or "not found"),
+        "policy": ("POLICY", "failure_signatures.toml"),
+    }
+    # The bare overview has to fit one screen, so the espresso tree collapses to
+    # its top-level groups.  Any term, or -t espresso, expands it in full.
+    collapse = only == "all" and not term and not paths
+
+    out, total = [], 0
+    for t in TYPES:
+        items = groups[t]
+        if only not in ("all", t) or not items:
+            continue
+        total += len(items)
+        head, where = labels[t]
+        out.append("%s %s   %s" % (c("1;4", head), c("2", "(%d)" % len(items)), c("2", where)))
+        if collapse and t in SUMMARISE:
+            out.extend(SUMMARISE[t](items))
+            out.append("")
+            continue
+        pad = min(28, max((len(e["name"]) for e in items), default=10))
+        for e in items:
+            desc = e["desc"]
+            if e.get("extra"):
+                desc += c("2", "   [%s]" % e["extra"])
+            out.append(row(e["name"], desc, pad, e.get("path") if paths else None))
+        out.append("")
+    if not total:
+        return "no match for %r%s" % (term, "" if only == "all" else " in -t %s" % only)
+    if not term and only == "all":
+        out.append(c("2", "  qmap <term>            substring search        "
+                         "qmap -t <type> [term]   restrict"))
+    return "\n".join(out).rstrip()
+
+
+NOTES = """\
+qmap reads, every time it runs:
+
+  skills / commands / agents   ~/.claude/{skills,commands,agents}, following
+                               symlinks into ~/dotfiles.  Never cached: these
+                               are milliseconds to read and change hourly.
+  permissions / hooks          ONLY ~/.claude/settings{,.local}.json and
+                               ./.claude/settings{,.local}.json, by explicit
+                               path.  A recursive grep under ~/.claude also
+                               matches inert plugin-marketplace definitions and
+                               reports hooks that are not enabled anywhere.
+  espresso                     cached at
+                               $XDG_CACHE_HOME/qmap/espresso-cli.tsv, rebuilt
+                               when any .py or .toml under the package is newer
+                               than the cache.  The package is an editable
+                               install, so source mtime is an exact freshness
+                               signal; --refresh is an escape hatch you should
+                               not need.
+  policy                       the signature table shipped with that same
+                               package.
+
+Matching is plain case-insensitive substring over name, description, and (for
+policy rows) the match pattern and fix text.  There is no ranking and no fuzzy
+matching on purpose: every hit is explainable, and nothing is silently missed
+because a scorer ranked it below a cutoff.
+
+qmap reports what exists.  It never runs, submits or mutates anything, and it
+deliberately does not answer "what should I do next" - that is the dft skill's
+job.  If one source is unavailable it prints a stderr line and renders the
+rest; a broken module environment never takes out the whole tool."""
+
+
+def main(argv):
+    args = list(argv[1:])
+    only, paths, refresh, as_json = "all", False, False, False
+    terms = []
+    while args:
+        a = args.pop(0)
+        if a in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        if a == "--notes":
+            print(NOTES)
+            return 0
+        if a == "--paths":
+            paths = True
+        elif a == "--json":
+            as_json = True
+        elif a == "--refresh":
+            refresh = True
+        elif a == "-t":
+            if not args:
+                warn("-t needs a type: %s" % ", ".join(TYPES + ["all"]))
+                return 2
+            key = args.pop(0).lower()
+            if key not in ALIASES:
+                warn("unknown type %r; expected one of: %s" % (key, ", ".join(TYPES + ["all"])))
+                return 2
+            only = ALIASES[key]
+        elif a.startswith("-"):
+            warn("unknown flag %r (try --help)" % a)
+            return 2
+        elif not terms and a.lower() in ALIASES and only == "all":
+            only = ALIASES[a.lower()]
+        else:
+            terms.append(a)
+
+    term = " ".join(terms)
+    entries = [e for e in load_all(refresh) if matches(e, term)]
+    if as_json:
+        keep = entries if only == "all" else [e for e in entries if e["type"] == only]
+        json.dump(keep, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        return 0
+    print(render(entries, term, only, paths))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv))
+    except BrokenPipeError:
+        os._exit(0)
+    except KeyboardInterrupt:
+        sys.exit(130)

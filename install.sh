@@ -59,6 +59,26 @@ if [ -d "$DOTFILES/claude/skills" ]; then
     done
 fi
 
+if [ -d "$DOTFILES/claude/agents" ]; then
+    mkdir -p "$HOME/.claude/agents"
+    for agent in "$DOTFILES"/claude/agents/*.md; do
+        [ -e "$agent" ] || continue
+        backup_and_link "$agent" "$HOME/.claude/agents/$(basename "$agent")"
+    done
+fi
+
+echo "==> Linking bin"
+# Scripts, not shell functions: `ssh triton qmap restart` has to work, and a
+# function is invisible to a non-interactive shell, to xargs and to any
+# subshell that did not source .bashrc.  ~/.local/bin is already first on PATH
+# and lives on shared /home, so one link covers every login node.
+mkdir -p "$HOME/.local/bin"
+for b in "$DOTFILES"/bin/*; do
+    [ -f "$b" ] || continue
+    [ -x "$b" ] || continue
+    backup_and_link "$b" "$HOME/.local/bin/$(basename "$b")"
+done
+
 echo "==> Cluster-specific setup"
 # Deliberately not tracked in git: partitions, module preludes and per-workflow
 # resources differ per cluster. `espresso cluster config` regenerates them, and
