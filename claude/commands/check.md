@@ -15,6 +15,10 @@ the current project) and report what changed.
    - `HUMAN` → attempt the documented fix from the `remedy` field **once**;
      if it has already been attempted, queue the escalation.
    - `UNKNOWN` → report it; do not guess.
+   - A path listed under `## Ignored jobs` in `<project>/CLAUDE.md` (or under
+     a listed prefix) is **not** acted on, whatever its class. Report all
+     ignored rows as one collapsed line. They rejoin the policy only when the
+     user asks for them by name.
 4. Refresh the derived block with `espresso status write`. It rewrites only the
    marked region and refuses if anything outside it would change. Never splice
    it by hand, and never edit the rest of the file without asking.

@@ -16,6 +16,9 @@ submitted and stop, unless the user said to go ahead in this message.
    - `HUMAN` rows — say what the documented fix is; do not apply it here.
    - Anything that has already failed twice for the same reason, per the
      existing rule in the dft skill.
+   - Ignored rows: paths listed under `## Ignored jobs` in
+     `<project>/CLAUDE.md`, or under a listed prefix. The user chose not to
+     finish these; resubmit only when they ask for one by name.
 4. On the user's go-ahead, submit, then `espresso status record <dir> --jobid
    <id> --outcome RETRY` for each, so the budget is actually spent.
 
