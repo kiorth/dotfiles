@@ -44,8 +44,11 @@ shown. "The old runs in this folder did it differently" is never a reason to dev
 ### 1a. Survey (read-only)
 
 1. Check what is already in place: markers in `status.md`, `CLAUDE.md`,
-   `.espresso-status.json`. Only fill the gaps. If all three exist, say the project is
-   already initialised and stop.
+   `.espresso-status.json`, and within `CLAUDE.md` the `## Known inconsistencies` and
+   `## Ignored jobs` sections. **Fill whichever are missing and leave the rest alone**,
+   section by section — a project converted before this skill existed will have the
+   files but not the sections. Say up front which parts are already there. Stop only
+   when every part exists; then report that and do nothing.
 2. `espresso status <project> --no-slurm`, then without `--no-slurm`. The first run
    shows what the files say; the second adds Slurm.
 3. Find the physics facts, read from what actually ran:
