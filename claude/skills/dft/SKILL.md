@@ -337,6 +337,25 @@ still-relevant content into `<project>/status.md`, show the merge as a diff and 
 permission to write, **then ask separately** for permission to delete the stray.
 Never delete before the merge is written.
 
+### Wavefunctions: keep the `.save` copy, never the scratch copy
+
+A finished pw.x run holds every wavefunction twice: the collected IBZ copy
+`<outdir>/<prefix>.save/wfcN.dat` (one per stored k-point; what quaffle, ph.x and
+pw2wannier90 restarts read) and the per-process scratch copy `<outdir>/<prefix>.wfc1 …
+.wfcN` next to it. After a successful run the scratch copy is a pure duplicate (it halved
+the quaffle project, 824 GB, 2026-10-28). Charge density and XML are a few MB; no gain there.
+
+- Delete `<prefix>.wfc[0-9]*` outside the `.save` only when the run finished cleanly
+  (`espresso status` OK, not `JOB DONE.` alone) **and** the `.save` holds as many
+  `wfcN.dat` as `<nks>` in its `data-file-schema.xml`. Delete by explicit path.
+- A `.save` with no `wfcN.dat` (runs with `wf_collect=.false.` under old templates, e.g.
+  the Ga and Mg satellite runs in quaffle) means the scratch files are the **only** copy:
+  never delete them.
+- Never touch the scratch files of a running or pending job, or of one whose downstream
+  step (nscf restart, pw2wannier90 on the same outdir) has not run yet.
+- `--keep-tmp` (quaffle inputs) keeps the `.save` wavefunctions; it is not a reason to
+  keep the scratch copy.
+
 ## 7. Checking on jobs
 
 Run `espresso status` — do not reconstruct job state by hand from `sacct` and
