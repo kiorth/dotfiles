@@ -70,6 +70,14 @@ is what applied.
 
 Every batch partition is `TIMELIMIT 5-00:00:00`; `hugemem` is 1 node / 80 cores / 2048000 M / 3 d.
 
+- **Default to a normal node; ask before high memory.** Size every request to fit a standard
+  40-core, 191000 M node (≤ ~4.5 G/core at 40 tasks). First cut the memory need instead
+  (fewer parallel processes, a band window, more nodes for distributed QE memory). If a job
+  still seems to need more than a normal node holds, or a milan or hugemem placement, **ask the
+  user first**: give the measured or estimated peak and how it was derived. Never request
+  more than the estimate plus ~30 % headroom (user correction, 2026-10-28: a ~150 GB estimate
+  was requested as 400 GB on milan).
+
 - **`batch-milan` caps at 2 nodes.** Any job needing >191000 M per node can *only* land on milan,
   so it is simultaneously memory-bound to milan and capped at 2 nodes there. For such a job
   "add more nodes" is not a lever — check `scontrol show partition <p> | grep MaxNodes` before
